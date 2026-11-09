@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="am" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BJR - Bahir Dar Airport Flight Information Display System</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            user-select: none;
+            overflow: hidden;
+        }
+        
+        /* Table Headers - Yellow Band matching airport monitor visual */
+        .fids-yellow-header {
+            background-color: #ffd700;
+            color: #051636;
+        }
+
+        /* Zebra Row Alternating Blue Colors */
+        .fids-row-even {
+            background-color: #0b1f48;
+        }
+        .fids-row-odd {
+            background-color: #061536;
+        }
+        
+        /* Dynamic Status Highlights */
+        .status-on-time {
+            color: #22c55e; /* Vibrant Green */
+            font-weight: 800;
+        }
+        
+        .status-boarding {
+            color: #eab308; /* Glowing Yellow */
+            font-weight: 900;
+            animation: pulse-status 1.2s infinite alternate;
+        }
+        
+        .status-departed {
+            color: #94a3b8; /* Subtle Slate Blue */
+            font-weight: 700;
+        }
+
+        .status-delayed {
+            color: #f97316; /* Glowing Orange */
+            font-weight: 900;
+        }
+
+        .status-cancelled {
+            color: #ef4444; /* Alert Red */
+            font-weight: 900;
+        }
+
+        @keyframes pulse-status {
+            0% { opacity: 0.7; transform: scale(0.98); }
+            100% { opacity: 1.0; transform: scale(1.02); }
+        }
+
+        /* Continuous Rolling Ticker */
+        .marquee-wrapper {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            padding-left: 100%;
+            animation: marquee 22s linear infinite;
+        }
+
+        @keyframes marquee {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(-100%, 0); }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between select-none">
+
+    <!-- TOP CONTROL BAR FOR AIRPORT OPERATORS -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-xs sm:text-sm shrink-0">
+        <div class="flex items-center space-x-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-900/60 text-blue-300 border border-blue-700">
+                BJR - BAHIR DAR AIRPORT
+            </span>
+            <span class="text-slate-400 font-medium hidden sm:inline">Flight Information Display System</span>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <!-- Language Switcher Button -->
+            <button onclick="toggleLanguage()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded border border-slate-700 flex items-center space-x-1 transition-colors">
+                <i class="fa-solid fa-language text-sm"></i>
+                <span id="lang-toggle-btn">Amharic / English (Auto)</span>
+            </button>
+            <!-- Control Console Button -->
+            <button id="btn-view-admin" onclick="switchView('admin')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded flex items-center space-x-1 transition-colors">
+                <i class="fa-solid fa-lock text-xs"></i>
+                <span>Flight Feed Control</span>
+            </button>
+            <!-- Fullscreen Button -->
+            <button onclick="toggleFullScreen()" class="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800" title="Fullscreen">
+                <i class="fa-solid fa-expand text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- AUTHENTICATION MODAL (LOGIN / REGISTER) -->
+    <div id="auth-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl relative">
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            
+            <!-- Login View -->
+            <div id="auth-login-view">
+                <div class="text-center mb-6">
+                    <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-600/20 text-blue-400 rounded-full mb-3 border border-blue-500/30">
+                        <i class="fa-solid fa-user-shield text-xl"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Agent Authorization Required</h2>
+                    <p class="text-xs text-slate-400 mt-1">Enter your 5-digit Employee ID and password to access controls.</p>
+                </div>
+
+                <form onsubmit="handleAgentLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Employee ID (5 Digits)</label>
+                        <input type="text" id="login-emp-id" required maxlength="5" pattern="\d{5}" placeholder="e.g. 25467" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Password</label>
+                        <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <div id="login-error-msg" class="text-xs text-rose-400 font-semibold hidden text-center"></div>
+
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg shadow-lg transition-all">
+                        Log In to Feed Console
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-400">
+                    <span>New Agent? </span>
+                    <button onclick="toggleAuthView('register')" class="text-amber-400 hover:underline font-bold">Register Employee ID</button>
+                </div>
+            </div>
+
+            <!-- Register View -->
+            <div id="auth-register-view" class="hidden">
+                <div class="text-center mb-6">
+                    <div class="inline-flex items-center justify-center w-12 h-12 bg-amber-600/20 text-amber-400 rounded-full mb-3 border border-amber-500/30">
+                        <i class="fa-solid fa-envelope text-xl"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Account Registration Request</h2>
+                    <p class="text-xs text-slate-400 mt-1">Self-registration is restricted. Contact the Administrator to request access credentials.</p>
+                </div>
+
+                <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-3 text-sm text-slate-300">
+                    <div class="flex items-start space-x-3">
+                        <i class="fa-solid fa-circle-info text-amber-400 mt-0.5"></i>
+                        <p class="text-xs leading-relaxed">
+                            To request an account, please send an email containing your <strong class="text-white">Full Name</strong> and official <strong class="text-white">5-Digit Employee ID</strong> to the system administrator.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700/60 font-mono text-xs text-center text-amber-300">
+                        EndegenaT@ethiopianairlines.com
+                    </div>
+                </div>
+
+                <div class="mt-5 space-y-3">
+                    <a href="mailto:EndegenaT@ethiopianairlines.com?subject=BJR%20FIDS%20Account%20Registration%20Request&body=Dear%20Admin,%0A%0APlease%20create%20a%20BJR%20FIDS%20Feed%20Control%20account%20for%20me.%0A%0AEmployee%20Name:%20%0AEmployee%20ID%20(5%20Digits):%20%0A%0AThank%20you." 
+                       class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg shadow-lg flex items-center justify-center space-x-2 transition-all text-sm">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>Send Registration Email</span>
+                    </a>
+
+                    <button onclick="toggleAuthView('login')" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg text-xs transition-colors">
+                        Back to Agent Login
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DISPLAY SCREEN (PHYSICAL MONITOR REPLICA) -->
+    <main id="public-view" class="flex-1 flex flex-col p-2 sm:p-4 lg:p-6 justify-between overflow-hidden relative bg-slate-950">
+        <div class="fids-board-container flex-1 rounded-lg border border-blue-500/30 flex flex-col overflow-hidden relative shadow-2xl">
+            
+            <!-- Top Header Section (Ethiopian Logo Left, Title Center, Digital Clock Right) -->
+            <div class="bg-gradient-to-r from-[#03153d] via-[#082a6e] to-[#03153d] px-4 sm:px-8 py-3 flex items-center justify-between border-b border-blue-400/30">
+                
+                <!-- Ethiopian Airlines Logo Badge -->
+                <div class="flex items-center space-x-3">
+                    <div class="bg-white rounded-md px-3 py-1.5 flex items-center justify-center shadow-md">
+                        <svg class="h-8 sm:h-10 w-auto" viewBox="0 0 300 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <text x="5" y="45" font-family="'Inter', sans-serif" font-weight="900" font-size="36" fill="#C8232A">Ethiopian</text>
+                            <text x="45" y="72" font-family="'Inter', sans-serif" font-weight="800" font-size="22" fill="#C8232A">የኢትዮጵያ</text>
+                            <g transform="translate(195, 5)">
+                                <path d="M10 65 C 30 65, 75 35, 95 10 C 70 20, 35 45, 10 65 Z" fill="#2E7D32"/>
+                                <path d="M10 65 C 35 60, 75 38, 92 22 C 72 30, 38 52, 10 65 Z" fill="#FBC02D"/>
+                                <path d="M10 65 C 40 58, 72 45, 88 32 C 68 40, 38 58, 10 65 Z" fill="#C8232A"/>
+                            </g>
+                        </svg>
+                    </div>
+                    <span class="text-xl sm:text-2xl font-extrabold tracking-wider text-slate-100 uppercase hidden md:inline">Airports</span>
+                </div>
+
+                <!-- Center Title (Bilingual) -->
+                <div class="text-center">
+                    <h1 id="board-title-text" class="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-100 tracking-wide font-sans drop-shadow-md">
+                        ወጪ የበረራዎች
+                    </h1>
+                </div>
+
+                <!-- Clock & Date Section -->
+                <div class="text-right">
+                    <div id="clock-time" class="text-2xl sm:text-4xl font-extrabold text-sky-400 font-mono tracking-tight">15:59</div>
+                    <div id="clock-date" class="text-xs sm:text-sm text-slate-300 font-semibold tracking-wide">Tue, August 11, 2026</div>
+                </div>
+            </div>
+
+            <!-- FIDS Table Container -->
+            <div class="flex-1 flex flex-col justify-start overflow-hidden">
+                <table class="w-full text-left border-collapse">
+                    <!-- Table Header (Yellow Band Matching Image) -->
+                    <thead>
+                        <tr class="fids-yellow-header text-sm sm:text-xl font-black uppercase border-b-2 border-yellow-500">
+                            <th class="py-3 px-3 sm:px-5 w-[14%]" id="th-flight">በረራ</th>
+                            <th class="py-3 px-3 sm:px-5 w-[18%]" id="th-carrier">አየር መንገድ</th>
+                            <th class="py-3 px-3 sm:px-5 w-[30%]" id="th-destination">መድረሻ</th>
+                            <th class="py-3 px-3 sm:px-5 w-[12%]" id="th-gate">በሮች</th>
+                            <th class="py-3 px-3 sm:px-5 w-[13%]" id="th-sched">የታቀደ ሰዓት</th>
+                            <th class="py-3 px-3 sm:px-5 w-[13%]" id="th-status">ሁኔታ</th>
+                        </tr>
+                    </thead>
+                    <!-- Dynamic Flight Rows -->
+                    <tbody id="fids-rows-body" class="divide-y divide-blue-900/40 text-base sm:text-2xl lg:text-3xl font-bold">
+                        <!-- Content populated via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Footer Band -->
+            <div class="bg-yellow-400 text-black px-4 py-1 text-xs sm:text-sm font-bold flex justify-between items-center">
+                <span id="page-indicator">ገጽ 1 ከ 1</span>
+                <span>ባህር ዳር ደጃዝማች በላይ ዘለቀ ዓለም አቀፍ አየር መንገድ (BJR)</span>
+            </div>
+        </div>
+
+        <!-- Bottom Rolling Information Ticker -->
+        <div class="mt-2 bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center overflow-hidden shadow-inner">
+            <div class="bg-red-600 text-white font-black text-xs sm:text-sm px-3 py-1 rounded flex items-center space-x-1 uppercase shrink-0 mr-3">
+                <i class="fa-solid fa-bullhorn animate-pulse"></i>
+                <span id="ticker-label">ማስታወቂያ</span>
+            </div>
+            <div class="marquee-wrapper flex-1 text-amber-300 font-semibold text-sm sm:text-lg">
+                <div id="ticker-text" class="marquee-content">
+                    እባክዎን ዕቃዎን ያለጠባቂ አይተዉ። | Please do not leave your luggage unattended.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ADMIN MANAGEMENT PANEL (MODAL / OVERLAY) -->
+    <div id="admin-view" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 hidden flex-col p-4 sm:p-8 overflow-y-auto">
+        <div class="max-w-6xl w-full mx-auto bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl flex flex-col space-y-6">
+            
+            <!-- Admin Header -->
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-600 text-white p-2.5 rounded-lg">
+                        <i class="fa-solid fa-sliders text-xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Bahir Dar Airport (BJR) - Flight Feed Management</h2>
+                        <p class="text-xs text-slate-400">Logged in as: <span id="active-agent-info" class="text-amber-300 font-semibold font-mono">--</span></p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="handleAgentLogout()" class="px-3 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-lg font-bold border border-rose-500/40 text-xs flex items-center space-x-1.5 transition-colors">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span>Logout</span>
+                    </button>
+                    <button onclick="switchView('public')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold border border-slate-700 flex items-center space-x-2">
+                        <i class="fa-solid fa-xmark"></i>
+                        <span>Close Console</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Add New / Edit Flight Form -->
+            <form id="add-flight-form" onsubmit="handleAddFlight(event)" class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 items-end">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Flight No. (በረራ)</label>
+                    <input type="text" id="input-flight" required value="ET " placeholder="e.g. ET 241" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Destination (መድረሻ)</label>
+                    <select id="input-airport" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                        <option value="">Select Domestic Destination...</option>
+                        <!-- Options generated dynamically -->
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Gate (በሮች)</label>
+                    <select id="input-gate" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                        <option value="-">- (None)</option>
+                        <option value="1">Gate 1 / በር 1</option>
+                        <option value="2">Gate 2 / በር 2</option>
+                        <option value="3">Gate 3 / በር 3</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Scheduled Time (ሰዓት)</label>
+                    <input type="time" id="input-time" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Status (ሁኔታ)</label>
+                    <select id="input-status" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                        <option value="AUTO">Auto (Time-based Rule)</option>
+                        <option value="ON_TIME">On Time / በሰዓቱ</option>
+                        <option value="BOARDING">Boarding / በማሳፈር ላይ</option>
+                        <option value="DEPARTED">Departed / በሯል</option>
+                        <option value="DELAYED">Delayed / ተራዝሟል</option>
+                        <option value="CANCELLED">Cancelled / ተሰርዟል</option>
+                    </select>
+                </div>
+
+                <div>
+                    <button id="form-submit-btn" type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all">
+                        <i id="form-submit-icon" class="fa-solid fa-plus"></i>
+                        <span id="form-submit-text">Add Schedule</span>
+                    </button>
+                    <button id="form-cancel-btn" type="button" onclick="cancelEditMode()" class="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-1 px-3 rounded-lg hidden text-xs">
+                        Cancel Edit
+                    </button>
+                </div>
+            </form>
+
+            <!-- Current Schedule Table -->
+            <div class="flex-1 overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-950 text-slate-400 text-xs uppercase font-bold border-b border-slate-800">
+                            <th class="py-3 px-4">Flight</th>
+                            <th class="py-3 px-4">Destination (EN / AM)</th>
+                            <th class="py-3 px-4">Gate</th>
+                            <th class="py-3 px-4">Scheduled Time</th>
+                            <th class="py-3 px-4">Calculated Status</th>
+                            <th class="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-table-body" class="divide-y divide-slate-800/60 text-sm">
+                        <!-- Populate dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- System Utilities -->
+            <div class="flex items-center justify-between pt-4 border-t border-slate-800 text-xs text-slate-500">
+                <span>All changes auto-persist to Local Storage. Status recalculates live every second.</span>
+                <button onclick="resetDefaultFlights()" class="text-rose-400 hover:text-rose-300 font-semibold underline">
+                    Reset to Default BJR Schedule
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Ethiopian Domestic Airports Directory
+        const ETHIOPIAN_AIRPORTS = [
+            { code: 'ADD', en: 'Addis Ababa', am: 'አዲስ አበባ' },
+            { code: 'MQX', en: 'Mekelle', am: 'መቀሌ' },
+            { code: 'GDQ', en: 'Gonder', am: 'ጎንደር' },
+            { code: 'JIM', en: 'Jimma', am: 'ጅማ' },
+            { code: 'JIJ', en: 'Jijiga', am: 'ጂጂጋ' },
+            { code: 'ASO', en: 'Asosa', am: 'አሶሳ' },
+            { code: 'AMH', en: 'Arba Minch', am: 'አርባ ምንጭ' },
+            { code: 'DIR', en: 'Dire Dawa', am: 'ድሬዳዋ' },
+            { code: 'AXU', en: 'Axum', am: 'አክሱም' },
+            { code: 'LLI', en: 'Lalibela', am: 'ላሊበላ' },
+            { code: 'DBM', en: 'Debre Markos', am: 'ደብረ ማርቆስ' },
+            { code: 'DSE', en: 'Dessie', am: 'ደሴ' },
+            { code: 'GMB', en: 'Gambela', am: 'ጋምቤላ' },
+            { code: 'SZE', en: 'Semera', am: 'ሰመራ' },
+            { code: 'SHC', en: 'Shire', am: 'ሽሬ' },
+            { code: 'JWA', en: 'Jinka', am: 'ጂንካ' },
+            { code: 'NGE', en: 'Nekemte', am: 'ነቀምቴ' },
+            { code: 'BCH', en: 'Baco', am: 'ባኮ' }
+        ];
+
+        // Default Flights Preset (Each entry given a unique ID and Gate)
+        const DEFAULT_FLIGHTS = [
+            { id: 'fl-1', flightNo: 'ET 294', airportCode: 'DSE', destEn: 'Dessie', destAm: 'ደሴ', gate: '1', time: '08:15', statusOverride: 'AUTO' },
+            { id: 'fl-2', flightNo: 'ET 194', airportCode: 'DBM', destEn: 'Debre Markos', destAm: 'ደብረ ማርቆስ', gate: '2', time: '09:30', statusOverride: 'AUTO' },
+            { id: 'fl-3', flightNo: 'ET 286', airportCode: 'GDQ', destEn: 'Gonder', destAm: 'ጎንደር', gate: '1', time: '08:40', statusOverride: 'AUTO' },
+            { id: 'fl-4', flightNo: 'ET 292', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '3', time: '10:05', statusOverride: 'AUTO' },
+            { id: 'fl-5', flightNo: 'ET 124', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '1', time: '10:20', statusOverride: 'AUTO' },
+            { id: 'fl-6', flightNo: 'ET 256', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '2', time: '10:40', statusOverride: 'AUTO' },
+            { id: 'fl-7', flightNo: 'ET 187', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '1', time: '11:00', statusOverride: 'AUTO' },
+            { id: 'fl-8', flightNo: 'ET 181', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '3', time: '11:35', statusOverride: 'AUTO' },
+            { id: 'fl-9', flightNo: 'ET 189', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '2', time: '13:20', statusOverride: 'AUTO' },
+            { id: 'fl-10', flightNo: 'ET 145', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '1', time: '14:05', statusOverride: 'AUTO' },
+            { id: 'fl-11', flightNo: 'ET 127', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '2', time: '14:50', statusOverride: 'AUTO' },
+            { id: 'fl-12', flightNo: 'ET 241', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '3', time: '17:05', statusOverride: 'AUTO' },
+            { id: 'fl-13', flightNo: 'ET 143', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '1', time: '17:20', statusOverride: 'AUTO' },
+            { id: 'fl-14', flightNo: 'ET 141', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '2', time: '17:50', statusOverride: 'AUTO' },
+            { id: 'fl-15', flightNo: 'ET 147', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '1', time: '18:30', statusOverride: 'AUTO' },
+            { id: 'fl-16', flightNo: 'ET 243', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '3', time: '18:50', statusOverride: 'AUTO' },
+            { id: 'fl-17', flightNo: 'ET 245', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '2', time: '19:20', statusOverride: 'AUTO' },
+            { id: 'fl-18', flightNo: 'ET 247', airportCode: 'ADD', destEn: 'Addis Ababa', destAm: 'አዲስ አበባ', gate: '1', time: '19:35', statusOverride: 'AUTO' }
+        ];
+
+        // App State
+        let flights = JSON.parse(localStorage.getItem('bjr_fids_flights'));
+        if (!flights || !Array.isArray(flights) || flights.length === 0) {
+            flights = [...DEFAULT_FLIGHTS];
+            localStorage.setItem('bjr_fids_flights', JSON.stringify(flights));
+        }
+
+        let currentLang = 'am';
+        let isAutoLangToggle = true;
+        let currentPage = 1;
+        const itemsPerPage = 8;
+        let editingFlightId = null;
+
+        // Pre-configured Admin Accounts
+        const PRESET_ADMINS = [
+            { empId: '25467', name: 'Admin (25467)', password: 'Mvtadd@99' },
+            { empId: '25474', name: 'Admin (25474)', password: 'Mvtadd@99' }
+        ];
+
+        let storedAgents = JSON.parse(localStorage.getItem('bjr_fids_agents')) || [];
+        PRESET_ADMINS.forEach(admin => {
+            if (!storedAgents.some(a => a.empId === admin.empId)) {
+                storedAgents.push(admin);
+            } else {
+                storedAgents = storedAgents.map(a => a.empId === admin.empId ? { ...a, ...admin } : a);
+            }
+        });
+        
+        let registeredAgents = storedAgents;
+        localStorage.setItem('bjr_fids_agents', JSON.stringify(registeredAgents));
+
+        let currentAgent = JSON.parse(localStorage.getItem('bjr_fids_current_agent')) || null;
+
+        // Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            populateAirportDropdown();
+            renderFIDSBoard();
+            renderAdminTable();
+            startClockEngine();
+            updateAgentUI();
+
+            // Language & Board Page Auto Toggle Loop (Every 10 sec)
+            setInterval(() => {
+                if (isAutoLangToggle) {
+                    currentLang = (currentLang === 'am') ? 'en' : 'am';
+                }
+                
+                const visibleFlights = getVisibleFlights();
+                const totalPages = Math.ceil(visibleFlights.length / itemsPerPage) || 1;
+                currentPage = (currentPage >= totalPages) ? 1 : currentPage + 1;
+
+                renderFIDSBoard();
+            }, 10000);
+        });
+
+        // Authentication & View Controls
+        function switchView(view) {
+            if (view === 'admin') {
+                if (!currentAgent) {
+                    openAuthModal();
+                    return;
+                }
+                document.getElementById('admin-view').classList.remove('hidden');
+                document.getElementById('admin-view').classList.add('flex');
+                renderAdminTable();
+            } else {
+                document.getElementById('admin-view').classList.add('hidden');
+                document.getElementById('admin-view').classList.remove('flex');
+            }
+        }
+
+        function openAuthModal() {
+            document.getElementById('auth-modal').classList.remove('hidden');
+            document.getElementById('auth-modal').classList.add('flex');
+            toggleAuthView('login');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+            document.getElementById('auth-modal').classList.remove('flex');
+        }
+
+        function toggleAuthView(view) {
+            const loginView = document.getElementById('auth-login-view');
+            const registerView = document.getElementById('auth-register-view');
+            if (view === 'register') {
+                loginView.classList.add('hidden');
+                registerView.classList.remove('hidden');
+            } else {
+                registerView.classList.add('hidden');
+                loginView.classList.remove('hidden');
+            }
+        }
+
+        function handleAgentLogin(e) {
+            e.preventDefault();
+            const empId = document.getElementById('login-emp-id').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errorMsg = document.getElementById('login-error-msg');
+
+            const agent = registeredAgents.find(a => a.empId === empId && a.password === password);
+
+            if (agent) {
+                currentAgent = agent;
+                localStorage.setItem('bjr_fids_current_agent', JSON.stringify(currentAgent));
+                errorMsg.classList.add('hidden');
+                closeAuthModal();
+                updateAgentUI();
+                switchView('admin');
+            } else {
+                errorMsg.innerText = 'Invalid Employee ID or Password.';
+                errorMsg.classList.remove('hidden');
+            }
+        }
+
+        function handleAgentLogout() {
+            currentAgent = null;
+            localStorage.removeItem('bjr_fids_current_agent');
+            updateAgentUI();
+            switchView('public');
+        }
+
+        function updateAgentUI() {
+            const activeAgentInfo = document.getElementById('active-agent-info');
+            if (currentAgent) {
+                activeAgentInfo.innerText = `${currentAgent.name} (ID: ${currentAgent.empId})`;
+            } else {
+                activeAgentInfo.innerText = '--';
+            }
+        }
+
+        function toggleLanguage() {
+            currentLang = (currentLang === 'am') ? 'en' : 'am';
+            renderFIDSBoard();
+        }
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {});
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        function populateAirportDropdown() {
+            const selectEl = document.getElementById('input-airport');
+            selectEl.innerHTML = '<option value="">Select Domestic Destination...</option>';
+            ETHIOPIAN_AIRPORTS.forEach(ap => {
+                const opt = document.createElement('option');
+                opt.value = ap.code;
+                opt.textContent = `${ap.code} - ${ap.en} (${ap.am})`;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        // Automatic Flight Status Rule Engine (Disappears 30 mins after departure)
+        function getFlightStatus(scheduledTimeString, statusOverride) {
+            if (statusOverride && statusOverride !== 'AUTO') {
+                switch (statusOverride) {
+                    case 'ON_TIME': return { en: 'On Time', am: 'በሰዓቱ', class: 'status-on-time' };
+                    case 'BOARDING': return { en: 'Boarding', am: 'በማሳፈር ላይ', class: 'status-boarding' };
+                    case 'DEPARTED': return { en: 'Departed', am: 'በሯል', class: 'status-departed' };
+                    case 'DELAYED': return { en: 'Delayed', am: 'ተራዝሟል', class: 'status-delayed' };
+                    case 'CANCELLED': return { en: 'Cancelled', am: 'ተሰርዟል', class: 'status-cancelled' };
+                }
+            }
+
+            const now = new Date();
+            const [hours, minutes] = scheduledTimeString.split(':').map(Number);
+            
+            const flightTime = new Date();
+            flightTime.setHours(hours, minutes, 0, 0);
+
+            const diffMinutes = Math.floor((flightTime - now) / 60000);
+
+            if (diffMinutes < -30) {
+                return { en: 'EXPIRED', am: 'አልፏል', class: 'hidden', isExpired: true };
+            } else if (diffMinutes < 0) {
+                return { en: 'Departed', am: 'በሯል', class: 'status-departed', isExpired: false };
+            } else if (diffMinutes <= 30) {
+                return { en: 'Boarding', am: 'በማሳፈር ላይ', class: 'status-boarding', isExpired: false };
+            } else {
+                return { en: 'On Time', am: 'በሰዓቱ', class: 'status-on-time', isExpired: false };
+            }
+        }
+
+        // Get Active Non-Expired Flights
+        function getVisibleFlights() {
+            return flights.filter(item => {
+                const statusObj = getFlightStatus(item.time, item.statusOverride);
+                return !statusObj.isExpired;
+            });
+        }
+
+        // Render Public Board
+        function renderFIDSBoard() {
+            const tbody = document.getElementById('fids-rows-body');
+            tbody.innerHTML = '';
+
+            const visibleFlights = getVisibleFlights();
+            const totalPages = Math.ceil(visibleFlights.length / itemsPerPage) || 1;
+            
+            if (currentPage > totalPages) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const pageFlights = visibleFlights.slice(startIndex, startIndex + itemsPerPage);
+
+            if (currentLang === 'am') {
+                document.getElementById('board-title-text').innerText = 'ወጪ የበረራዎች';
+                document.getElementById('th-flight').innerText = 'በረራ';
+                document.getElementById('th-carrier').innerText = 'አየር መንገድ';
+                document.getElementById('th-destination').innerText = 'መድረሻ';
+                document.getElementById('th-gate').innerText = 'በሮች';
+                document.getElementById('th-sched').innerText = 'የታቀደ ሰዓት';
+                document.getElementById('th-status').innerText = 'ሁኔታ';
+                document.getElementById('ticker-label').innerText = 'ማስታወቂያ';
+                document.getElementById('ticker-text').innerText = 'እባክዎን ዕቃዎን ያለጠባቂ አይተዉ።';
+                document.getElementById('page-indicator').innerText = `ገጽ ${currentPage} ከ ${totalPages}`;
+            } else {
+                document.getElementById('board-title-text').innerText = 'Departures';
+                document.getElementById('th-flight').innerText = 'FLIGHT';
+                document.getElementById('th-carrier').innerText = 'CARRIER';
+                document.getElementById('th-destination').innerText = 'DESTINATION';
+                document.getElementById('th-gate').innerText = 'GATE';
+                document.getElementById('th-sched').innerText = 'SCHED. T';
+                document.getElementById('th-status').innerText = 'STATUS';
+                document.getElementById('ticker-label').innerText = 'ANNOUNCEMENT';
+                document.getElementById('ticker-text').innerText = 'Please do not leave your luggage unattended.';
+                document.getElementById('page-indicator').innerText = `Page ${currentPage} of ${totalPages}`;
+            }
+
+            pageFlights.forEach((item, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = (idx % 2 === 0) ? 'fids-row-even' : 'fids-row-odd';
+
+                const statusObj = getFlightStatus(item.time, item.statusOverride);
+                const destText = (currentLang === 'am') ? item.destAm : item.destEn;
+                const statusText = (currentLang === 'am') ? statusObj.am : statusObj.en;
+                const gateText = (item.gate && item.gate !== '-') ? item.gate : '-';
+
+                tr.innerHTML = `
+                    <td class="py-3 px-3 sm:px-5 font-black font-mono tracking-wider text-white">${item.flightNo}</td>
+                    <td class="py-3 px-3 sm:px-5">
+                        <div class="bg-white rounded px-2 py-1 inline-flex items-center justify-center h-8 w-24 sm:w-28 shadow-sm">
+                            <svg class="h-6 w-auto" viewBox="0 0 300 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <text x="5" y="45" font-family="'Inter', sans-serif" font-weight="900" font-size="36" fill="#C8232A">Ethiopian</text>
+                                <text x="45" y="72" font-family="'Inter', sans-serif" font-weight="800" font-size="22" fill="#C8232A">የኢትዮጵያ</text>
+                                <g transform="translate(195, 5)">
+                                    <path d="M10 65 C 30 65, 75 35, 95 10 C 70 20, 35 45, 10 65 Z" fill="#2E7D32"/>
+                                    <path d="M10 65 C 35 60, 75 38, 92 22 C 72 30, 38 52, 10 65 Z" fill="#FBC02D"/>
+                                    <path d="M10 65 C 40 58, 72 45, 88 32 C 68 40, 38 58, 10 65 Z" fill="#C8232A"/>
+                                </g>
+                            </svg>
+                        </div>
+                    </td>
+                    <td class="py-3 px-3 sm:px-5 font-extrabold tracking-wide text-white">${destText}</td>
+                    <td class="py-3 px-3 sm:px-5 font-bold font-mono text-amber-400">${gateText}</td>
+                    <td class="py-3 px-3 sm:px-5 font-mono font-bold text-sky-200">${item.time}</td>
+                    <td class="py-3 px-3 sm:px-5 ${statusObj.class}">${statusText}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Form Submission Logic (Add or Update Flight)
+        function handleAddFlight(e) {
+            e.preventDefault();
+            const flightNo = document.getElementById('input-flight').value.trim();
+            const airportCode = document.getElementById('input-airport').value;
+            const gate = document.getElementById('input-gate').value;
+            const time = document.getElementById('input-time').value;
+            const statusOverride = document.getElementById('input-status').value;
+
+            const airport = ETHIOPIAN_AIRPORTS.find(a => a.code === airportCode);
+            if (!airport) return;
+
+            if (editingFlightId) {
+                // Update Flight
+                flights = flights.map(f => {
+                    if (f.id === editingFlightId) {
+                        return { ...f, flightNo, airportCode, destEn: airport.en, destAm: airport.am, gate, time, statusOverride };
+                    }
+                    return f;
+                });
+                editingFlightId = null;
+            } else {
+                // Add New Flight
+                const newFlight = {
+                    id: 'fl-' + Date.now(),
+                    flightNo,
+                    airportCode,
+                    destEn: airport.en,
+                    destAm: airport.am,
+                    gate,
+                    time,
+                    statusOverride
+                };
+                flights.push(newFlight);
+            }
+
+            saveAndRefresh();
+            resetForm();
+        }
+
+        function editFlight(id) {
+            const flight = flights.find(f => f.id === id);
+            if (!flight) return;
+
+            editingFlightId = id;
+            document.getElementById('input-flight').value = flight.flightNo;
+            document.getElementById('input-airport').value = flight.airportCode;
+            document.getElementById('input-gate').value = flight.gate || '-';
+            document.getElementById('input-time').value = flight.time;
+            document.getElementById('input-status').value = flight.statusOverride || 'AUTO';
+
+            document.getElementById('form-submit-text').innerText = 'Update Schedule';
+            document.getElementById('form-submit-icon').className = 'fa-solid fa-check';
+            document.getElementById('form-submit-btn').className = 'w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all';
+            document.getElementById('form-cancel-btn').classList.remove('hidden');
+        }
+
+        function cancelEditMode() {
+            editingFlightId = null;
+            resetForm();
+        }
+
+        function resetForm() {
+            document.getElementById('input-flight').value = 'ET ';
+            document.getElementById('input-airport').value = '';
+            document.getElementById('input-gate').value = '-';
+            document.getElementById('input-time').value = '';
+            document.getElementById('input-status').value = 'AUTO';
+
+            document.getElementById('form-submit-text').innerText = 'Add Schedule';
+            document.getElementById('form-submit-icon').className = 'fa-solid fa-plus';
+            document.getElementById('form-submit-btn').className = 'w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all';
+            document.getElementById('form-cancel-btn').classList.add('hidden');
+        }
+
+        function deleteFlight(id) {
+            flights = flights.filter(f => f.id !== id);
+            saveAndRefresh();
+        }
+
+        function resetDefaultFlights() {
+            flights = [...DEFAULT_FLIGHTS];
+            saveAndRefresh();
+        }
+
+        function saveAndRefresh() {
+            localStorage.setItem('bjr_fids_flights', JSON.stringify(flights));
+            renderFIDSBoard();
+            renderAdminTable();
+        }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('admin-table-body');
+            tbody.innerHTML = '';
+
+            flights.forEach((item) => {
+                const statusObj = getFlightStatus(item.time, item.statusOverride);
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/40 border-b border-slate-800/40';
+
+                const gateText = (item.gate && item.gate !== '-') ? `Gate ${item.gate}` : '-';
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono font-bold text-amber-300">${item.flightNo}</td>
+                    <td class="py-3 px-4 font-medium">${item.destEn} (${item.destAm})</td>
+                    <td class="py-3 px-4 font-mono font-semibold text-slate-300">${gateText}</td>
+                    <td class="py-3 px-4 font-mono">${item.time}</td>
+                    <td class="py-3 px-4 ${statusObj.class}">${statusObj.en} / ${statusObj.am}</td>
+                    <td class="py-3 px-4 text-right space-x-1">
+                        <button onclick="editFlight('${item.id}')" class="px-2 py-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600 hover:text-white rounded transition-colors text-xs font-bold">
+                            <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
+                        </button>
+                        <button onclick="deleteFlight('${item.id}')" class="px-2 py-1 bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white rounded transition-colors text-xs font-bold">
+                            <i class="fa-solid fa-trash mr-1"></i> Delete
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function startClockEngine() {
+            setInterval(() => {
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                document.getElementById('clock-time').innerText = `${hours}:${minutes}`;
+
+                const options = { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' };
+                document.getElementById('clock-date').innerText = now.toLocaleDateString('en-US', options);
+
+                renderFIDSBoard();
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
